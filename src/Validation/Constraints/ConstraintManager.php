@@ -1,0 +1,260 @@
+<?php
+
+namespace Shrd\Laravel\JwtTokens\Validation\Constraints;
+
+use Carbon\CarbonInterval;
+use Carbon\FactoryImmutable;
+use Closure;
+use DateInterval;
+use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Validation\Factory as ValidationFactory;
+use Illuminate\Support\Str;
+use Lcobucci\JWT\Validation\Constraint;
+use Lcobucci\JWT\Validation\ValidAt;
+use Psr\Clock\ClockInterface;
+use RuntimeException;
+use Shrd\Laravel\JwtTokens\Algorithms\Algorithm;
+use Shrd\Laravel\JwtTokens\Contracts\ConstraintFactory;
+use Shrd\Laravel\JwtTokens\Contracts\KeySetResolver;
+use Shrd\Laravel\JwtTokens\Exceptions\KeySetLoadException;
+use Shrd\Laravel\JwtTokens\Signers\Verifier;
+
+class ConstraintManager implements ConstraintFactory
+{
+    protected array $customConstraints = [];
+    protected array $customConstructors = [];
+
+    public function __construct(protected Container         $container,
+                                protected ConfigRepository  $config,
+                                protected ValidationFactory $validationFactory,
+                                protected KeySetResolver    $keySetResolver)
+    {
+    }
+
+    public function getContainer(): Container
+    {
+        return $this->container;
+    }
+
+    public function setContainer(Container $container): static
+    {
+        $this->container = $container;
+        return $this;
+    }
+
+    public function extend(string $constraint, Closure|Constraint $callback): static
+    {
+        if($callback instanceof Constraint) {
+            $this->customConstraints[$constraint] = $callback;
+        } else {
+            $this->customConstructors[$constraint] = $callback;
+        }
+
+        return $this;
+    }
+
+    public function callCustomConstructor(string $constraint, array $arguments): Constraint
+    {
+        return $this->customConstructors[$constraint]($this->container, ...$arguments);
+    }
+
+    protected function getClock(): ClockInterface
+    {
+        if($this->container->has(ClockInterface::class)) {
+            return $this->container->make(ClockInterface::class);
+        } else {
+            return new FactoryImmutable();
+        }
+    }
+
+    protected function defaultLeeway(): DateInterval
+    {
+        return $this->toDateInterval($this->config->get('jwt.constraints.leeway', '10 seconds'));
+    }
+
+    protected function defaultAudience(): string
+    {
+        $aud = $this->config->get('jwt.constraints.audience');
+        if(!$aud) throw new RuntimeException('No default audience set.');
+        return $aud;
+    }
+
+    protected function defaultIssuers(): array
+    {
+        return array_filter(
+            $this->config->get('jwt.constraints.issuers', []),
+            fn($issuer) => is_string($issuer)
+        );
+    }
+
+    protected function defaultAlgorithms(): array
+    {
+        $algorithms = $this->config->get('jwt.constraints.algorithms', [
+            Algorithm::RS256,
+            Algorithm::RS384,
+            Algorithm::RS512
+        ]);
+
+        if(is_string($algorithms)) $algorithms = explode(',', $algorithms);
+
+        $result = [];
+        foreach ($algorithms as $key => $value) {
+            if(is_int($key)) {
+                $algs = $value;
+            } else {
+                $algs = $key;
+                if(!$value) continue;
+            }
+
+            if(is_string($algs) && Str::contains(',', $algs)) {
+                foreach(explode(',', $algs) as $algorithm) {
+                    $result[] = $algorithm;
+                }
+            } else {
+                $result[] = $algs;
+            }
+        }
+        return $result;
+    }
+
+    protected function toDateInterval(mixed $value): ?DateInterval
+    {
+        if($value === null) return null;
+        if(is_numeric($value)) return CarbonInterval::seconds($value);
+        return CarbonInterval::make($value, skipCopy: true);
+    }
+
+    public function from(string|Constraint|callable $constraint, ...$arguments): Constraint
+    {
+        if($constraint instanceof Constraint) return $constraint;
+        if(is_string($constraint)) return $this->create($constraint, ...$arguments);
+        return $this->createCallbackConstraint($constraint, ...$arguments);
+    }
+
+    public function create(string $constraint, ...$arguments): Constraint
+    {
+        if(array_key_exists($constraint, $this->customConstraints)) {
+            return $this->customConstraints[$constraint];
+        }
+
+        if(array_key_exists($constraint, $this->customConstructors)) {
+            return $this->callCustomConstructor($constraint, $arguments);
+        }
+
+        $method = "create".Str::studly($constraint).'Constraint';
+        if(method_exists($this, $method)) {
+            return $this->$method(...$arguments);
+        }
+
+        return $this->container->make($constraint, $arguments);
+    }
+
+    public function createValidAtConstraint(bool $strict = true,
+                                            mixed $leeway = null): ValidAt
+    {
+        $leeway = $this->toDateInterval($leeway) ?? $this->defaultLeeway();
+        $clock = $this->getClock();
+        if($strict) {
+            return new Constraint\StrictValidAt($clock, $leeway);
+        } else {
+            return new Constraint\LooseValidAt($clock, $leeway);
+        }
+    }
+
+    public function createHasClaimWithValueConstraint(string $claim,
+                                                      mixed $value): Constraint\HasClaimWithValue
+    {
+        return new Constraint\HasClaimWithValue($claim, $value);
+    }
+
+    public function createIdentifiedByConstraint(string $tid): Constraint\IdentifiedBy
+    {
+        return new Constraint\IdentifiedBy($tid);
+    }
+
+    public function createIssuedByConstraint(string ...$issuers): Constraint\IssuedBy
+    {
+        if(count($issuers) === 0) $issuers = $this->defaultIssuers();
+        return new Constraint\IssuedBy(...$issuers);
+    }
+
+    public function createPermittedForConstraint(?string $audience = null): Constraint\PermittedFor
+    {
+        return new Constraint\PermittedFor($audience ?? $this->defaultAudience());
+    }
+
+    public function createRelatedToConstraint(string $subject): Constraint\RelatedTo
+    {
+        return new Constraint\RelatedTo($subject);
+    }
+
+    /**
+     * @throws KeySetLoadException
+     */
+    public function createSignedWithConstraint(string ...$keySets): SignedWith
+    {
+        $keySet = $this->keySetResolver->combine(...$keySets);
+
+        return new SignedWith($keySet);
+    }
+
+    public function createSignedUsingConstraint(string|Algorithm ...$algorithms): SignedUsing
+    {
+        if(count($algorithms) === 0) $algorithms = $this->defaultAlgorithms();
+        $algorithms = array_map(fn($alg) => is_string($alg) ? Algorithm::from($alg) : $alg, $algorithms);
+        return new SignedUsing($algorithms);
+    }
+
+    public function createVerifyWithConstraint(Verifier $verifier): VerifyWith
+    {
+        return new VerifyWith($verifier);
+    }
+
+    public function createClaimRulesConstraint(array $rules,
+                                               array $messages = [],
+                                               array $attributes = []): ClaimRules
+    {
+        return new ClaimRules(
+            validationFactory: $this->validationFactory,
+            rules: $rules,
+            messages: $messages,
+            attributes: $attributes
+        );
+    }
+
+    public function createCallbackConstraint(callable $callback,
+                                             ?string $message = null): CallbackConstraint
+    {
+        return new CallbackConstraint($callback, $message);
+    }
+
+    public function createHeaderRulesConstraint(array $rules,
+                                                array $messages = [],
+                                                array $attributes = []): HeaderRules
+    {
+        return new HeaderRules(
+            validationFactory: $this->validationFactory,
+            rules: $rules,
+            messages: $messages,
+            attributes: $attributes
+        );
+    }
+
+    public function createHasClaimsConstraint(string ...$names): HasClaims
+    {
+        return new HasClaims($names);
+    }
+
+    public function createHasHeadersConstraint(string ...$names): HasHeaders
+    {
+        return new HasHeaders($names);
+    }
+
+    public function createHasKeyIdConstraint(): HasHeaders
+    {
+        return new HasHeaders(['kid']);
+    }
+
+
+}
