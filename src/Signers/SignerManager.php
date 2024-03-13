@@ -10,6 +10,7 @@ use RuntimeException;
 use Shrd\Laravel\JwtTokens\Algorithms\Algorithm;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetResolver;
 use Shrd\Laravel\JwtTokens\Contracts\SignerRegistry;
+use Shrd\Laravel\JwtTokens\Exceptions\KeySetLoadException;
 use Shrd\Laravel\JwtTokens\Keys\NoneKey;
 use Shrd\Laravel\JwtTokens\Keys\Sets\KeySet;
 use Shrd\Laravel\JwtTokens\Keys\VerificationKey;
@@ -168,6 +169,11 @@ class SignerManager implements SignerRegistry
         }
     }
 
+    protected function createNoneSigner(array $config): NoneSigner
+    {
+        return new NoneSigner;
+    }
+
     public function signerUsing(AlgorithmImplementation|string $algorithm,
                                 Key|KeySet|string $key,
                                 ?string $kid = null): Signer
@@ -180,13 +186,13 @@ class SignerManager implements SignerRegistry
         return new WrappedSigner($algorithm, $key, $kid);
     }
 
-    public function verifierUsing(AlgorithmImplementation|string $algorithm, Key|KeySet|string $key)
+    /**
+     * @throws KeySetLoadException
+     */
+    public function verifierUsing(AlgorithmImplementation|string $algorithm, Key|KeySet|string $key): Verifier
     {
-
-    }
-
-    protected function createNoneSigner(array $config): NoneSigner
-    {
-        return new NoneSigner;
+        if(is_string($algorithm)) $algorithm = Algorithm::from($algorithm);
+        if(is_string($key)) $key = $this->keySetResolver->get($key);
+        return new WrappedVerifier($algorithm, $key);
     }
 }
