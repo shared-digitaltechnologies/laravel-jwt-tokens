@@ -80,10 +80,10 @@ class ClaimsBag implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, I
      * Tries to convert the provided value inta a Claims Bag. Just returns the value itself if it already is a
      * ClaimsBag.
      *
-     * @param ClaimsBag|Arrayable|iterable|string|UnencryptedToken|null $value
+     * @param ClaimsBag|Arrayable|iterable|DataSet|string|UnencryptedToken|null $value
      * @return static
      */
-    public static function coerce(self|Arrayable|iterable|string|UnencryptedToken|null $value): static
+    public static function coerce(self|Arrayable|iterable|string|DataSet|UnencryptedToken|null $value): static
     {
         if($value instanceof static) return $value;
         return static::from($value);

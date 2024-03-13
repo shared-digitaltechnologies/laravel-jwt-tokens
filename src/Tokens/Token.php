@@ -102,7 +102,9 @@ readonly class Token implements UnencryptedToken, ArrayAccess
 
     public function hasBeenIssuedBy(string ...$issuers): bool
     {
-        return in_array($this->claims->getIssuer(), $issuers, true);
+        $issuer = $this->claims->getIssuer();
+        if($issuer === null) return false;
+        return in_array($issuer, $issuers, true);
     }
 
     public function hasBeenIssuedBefore(DateTimeInterface $now): bool

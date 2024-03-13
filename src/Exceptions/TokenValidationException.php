@@ -32,7 +32,9 @@ class TokenValidationException extends Exception implements InvalidJwtException
     {
         $violations = array_map(
             static function (ConstraintViolation $violation): string {
-                return '['.$violation->getConstraintClass().']: ' . $violation->getMessage();
+                $message = str_replace("\n", "\n    ", $violation->getMessage());
+
+                return '  ['.$violation->getConstraintClass().']: ' . $message;
             },
             $violations,
         );

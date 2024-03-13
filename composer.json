@@ -1,9 +1,7 @@
 {
     "name": "shrd/laravel-jwt-tokens",
-    "version": "0.2.0",
     "description": "Generated Composer Package",
     "license": "proprietary",
-    "keywords": [],
     "readme": "README.md",
     "require": {
         "php": ">= 8.2",
@@ -16,8 +14,9 @@
         "illuminate/validation": "^10.0",
         "illuminate/http": "^10.0",
         "illuminate/auth": "^10.0",
+        "illuminate/console": "^10.0",
         "lcobucci/jwt": "^5.2",
-        "shrd/php-encoding-combinators": "0.2.0"
+        "shrd/php-encoding-combinators": "^0.3.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",

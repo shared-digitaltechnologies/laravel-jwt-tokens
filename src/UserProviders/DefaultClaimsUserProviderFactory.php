@@ -5,10 +5,10 @@ namespace Shrd\Laravel\JwtTokens\UserProviders;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use InvalidArgumentException;
-use Shrd\Laravel\JwtTokens\Contracts\TokenUserProvider;
-use Shrd\Laravel\JwtTokens\Contracts\TokenUserProviderFactory;
+use Shrd\Laravel\JwtTokens\Contracts\ClaimsUserProvider;
+use Shrd\Laravel\JwtTokens\Contracts\ClaimsUserProviderFactory;
 
-class DefaultTokenUserProviderFactory implements TokenUserProviderFactory
+class DefaultClaimsUserProviderFactory implements ClaimsUserProviderFactory
 {
     protected mixed $authManager;
 
@@ -20,12 +20,12 @@ class DefaultTokenUserProviderFactory implements TokenUserProviderFactory
         $this->authManager = $container->make('auth');
     }
 
-    public function createTokenUserProvider(?string $provider = null): TokenUserProvider
+    public function createClaimsUserProvider(?string $provider = null): ClaimsUserProvider
     {
         $provider = $this->authManager->createUserProvider($provider);
-        if(!($provider instanceof TokenUserProvider)) {
+        if(!($provider instanceof ClaimsUserProvider)) {
             throw new InvalidArgumentException(
-                "The user-provider '$provider' is not a ".TokenUserProvider::class
+                "The user-provider '$provider' is not a ".ClaimsUserProvider::class
             );
         }
         return $provider;

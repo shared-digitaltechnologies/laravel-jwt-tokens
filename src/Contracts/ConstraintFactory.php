@@ -2,7 +2,6 @@
 
 namespace Shrd\Laravel\JwtTokens\Contracts;
 
-use Closure;
 use Lcobucci\JWT\Validation\Constraint;
 
 /**
@@ -24,6 +23,6 @@ interface ConstraintFactory
                                                 array $messages = [],
                                                 array $attributes = []): Constraint;
 
-    public function extend(string $constraint,
-                           Closure|Constraint $callback): static;
+    public function extend(string|object $constraint,
+                           callable|Constraint|null $callback = null): static;
 }

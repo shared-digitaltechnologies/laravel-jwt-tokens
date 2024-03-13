@@ -2,13 +2,10 @@
 
 namespace Shrd\Laravel\JwtTokens\Contracts;
 
-use Lcobucci\JWT\Token;
+use Shrd\Laravel\JwtTokens\Tokens\Token;
 use Shrd\Laravel\JwtTokens\Validation\TokenValidator;
 
-/**
- * Constructs new token validator instances.
- */
 interface TokenValidatorFactory
 {
-    public function validate(Token $token): TokenValidator;
+    public function validate(string|Token $token): TokenValidator;
 }

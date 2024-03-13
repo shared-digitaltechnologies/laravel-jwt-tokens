@@ -4,12 +4,13 @@ namespace Shrd\Laravel\JwtTokens\Guards;
 
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Contracts\Auth\UserProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Traits\Macroable;
 use Lcobucci\JWT\Parser as TokenParser;
 use Lcobucci\JWT\Token;
 use Lcobucci\JWT\UnencryptedToken;
-use Shrd\Laravel\JwtTokens\Contracts\TokenUserProvider;
+use Shrd\Laravel\JwtTokens\Contracts\ClaimsUserProvider;
 use Shrd\Laravel\JwtTokens\Exceptions\JwtParseException;
 use Shrd\Laravel\JwtTokens\Guards\Concerns\HasParser;
 use Shrd\Laravel\JwtTokens\Guards\Concerns\HasRequest;
@@ -27,11 +28,12 @@ class JwtTokenGuard
     private bool $userResolved = false;
 
     private ?Token $token = null;
+    private ?ClaimsBag $claims = null;
 
-    public function __construct(public readonly string    $name,
-                                TokenParser               $parser,
-                                TokenUserProvider         $provider,
-                                ?Request                  $request = null)
+    public function __construct(public readonly string $name,
+                                TokenParser            $parser,
+                                ClaimsUserProvider     $provider,
+                                ?Request               $request = null)
     {
         $this
             ->setParser($parser)
@@ -88,14 +90,27 @@ class JwtTokenGuard
         return $this;
     }
 
+    public function setClaims(mixed $claims): static
+    {
+        $this->claims = ClaimsBag::from($claims);
+        $this->user = null;
+        $this->userResolved = false;
+        return $this;
+    }
+
     /**
      * @throws JwtParseException
      */
     public function claims(): ClaimsBag
     {
+        if($this->claims !== null) {
+            return $this->claims;
+        }
+
+
         $token = $this->token();
         if($token instanceof \Shrd\Laravel\JwtTokens\Tokens\Token) {
-            return $token->claims();
+            return $token->claims;
         } else if($token instanceof UnencryptedToken) {
             return ClaimsBag::fromDataSet($token->claims());
         } else {
@@ -109,6 +124,12 @@ class JwtTokenGuard
     public function user(): ?Authenticatable
     {
         if($this->userResolved) return $this->user;
+
+        if($this->claims !== null) {
+            $user = $this->retrieveUserByClaims($this->claims);
+            $this->setUser($user);
+            return $user;
+        }
 
         $token = $this->token();
         if($token === null) {
@@ -148,7 +169,14 @@ class JwtTokenGuard
 
     public function validate(array $credentials = []): bool
     {
-        return false;
+        if($this->provider instanceof UserProvider) {
+            $user = $this->provider->retrieveByCredentials($credentials);
+            if($user === null) return false;
+
+            return $this->provider->validateCredentials($user, $credentials);
+        } else {
+            return false;
+        }
     }
 
     /**

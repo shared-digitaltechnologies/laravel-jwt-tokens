@@ -4,7 +4,7 @@ namespace Shrd\Laravel\JwtTokens\Events;
 
 use Illuminate\Contracts\Auth\Authenticatable;
 use Lcobucci\JWT\Token;
-use Shrd\Laravel\JwtTokens\Contracts\TokenUserProvider;
+use Shrd\Laravel\JwtTokens\Contracts\ClaimsUserProvider;
 
 readonly class AuthenticatedByToken implements Authenticated
 {

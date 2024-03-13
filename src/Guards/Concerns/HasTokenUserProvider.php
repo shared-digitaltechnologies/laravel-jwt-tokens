@@ -5,7 +5,7 @@ namespace Shrd\Laravel\JwtTokens\Guards\Concerns;
 use Exception;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Lcobucci\JWT\Token;
-use Shrd\Laravel\JwtTokens\Contracts\TokenUserProvider;
+use Shrd\Laravel\JwtTokens\Contracts\ClaimsUserProvider;
 use Shrd\Laravel\JwtTokens\Events\AuthenticatingByClaims;
 use Shrd\Laravel\JwtTokens\Events\AuthenticatingByToken;
 use Shrd\Laravel\JwtTokens\Events\AuthenticationByClaimsFailed;
@@ -18,14 +18,14 @@ trait HasTokenUserProvider
 {
     use DispatchesEvents;
 
-    private TokenUserProvider $provider;
+    private ClaimsUserProvider $provider;
 
-    public function getProvider(): TokenUserProvider
+    public function getProvider(): ClaimsUserProvider
     {
         return $this->provider;
     }
 
-    public function setProvider(TokenUserProvider $provider): static
+    public function setProvider(ClaimsUserProvider $provider): static
     {
         $this->provider = $provider;
         return $this;
@@ -79,7 +79,7 @@ trait HasTokenUserProvider
         $exception = null;
         $user = null;
         try {
-            $user = $provider->retrieveByToken($token);
+            $user = $provider->retrieveByJwtToken($token);
         } catch (Exception $e) {
             $exception = $e;
         }

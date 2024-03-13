@@ -13,7 +13,8 @@ use Lcobucci\JWT\Encoding\JoseEncoder;
 use Lcobucci\JWT\Parser as ParserInterface;
 use Shrd\Laravel\JwtTokens\Guards\JwtTokenGuard;
 use Shrd\Laravel\JwtTokens\Tokens\Parser;
-use Shrd\Laravel\JwtTokens\UserProviders\DefaultTokenUserProviderFactory;
+use Shrd\Laravel\JwtTokens\Console\Commands;
+use Shrd\Laravel\JwtTokens\UserProviders\DefaultClaimsUserProviderFactory;
 
 class ServiceProvider extends BaseServiceProvider
 {
@@ -28,10 +29,10 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->bind(ParserInterface::class, Parser::class);
 
 
-        $this->app->singleton(DefaultTokenUserProviderFactory::class);
+        $this->app->singleton(DefaultClaimsUserProviderFactory::class);
         $this->app->bind(
-            Contracts\TokenUserProviderFactory::class,
-            DefaultTokenUserProviderFactory::class
+            Contracts\ClaimsUserProviderFactory::class,
+            DefaultClaimsUserProviderFactory::class
         );
 
         $this->app->singleton(JwtService::class, function(Application $app) {
@@ -82,6 +83,10 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->bootPackage();
         $this->bootAuthManager($authManager);
+
+        if($this->app->runningInConsole()) {
+            $this->bootConsole();
+        }
     }
 
     private function bootPackage(): void
@@ -96,7 +101,7 @@ class ServiceProvider extends BaseServiceProvider
         $authManager->extend('jwt-bearer-token', static function (Application $app, string $name, array $config) {
 
             $providerKey = $config['provider'];
-            $provider = $app[DefaultTokenUserProviderFactory::class]->createTokenUserProvider($providerKey);
+            $provider = $app[DefaultClaimsUserProviderFactory::class]->createTokenUserProvider($providerKey);
             $parser = $app[ParserInterface::class];
 
             $guard = new JwtTokenGuard(
@@ -109,5 +114,12 @@ class ServiceProvider extends BaseServiceProvider
                 ->setDispatcher($app['events'])
                 ->setRequest($app->refresh('request', $guard, 'setRequest'));
         });
+    }
+
+    private function bootConsole(): void
+    {
+        $this->commands(
+            Commands\IdeHelper::class
+        );
     }
 }

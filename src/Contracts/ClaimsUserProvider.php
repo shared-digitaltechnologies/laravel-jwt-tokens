@@ -9,15 +9,16 @@ use Shrd\Laravel\JwtTokens\Tokens\Claims\ClaimsBag;
 /**
  * Retrieves authenticatables from jwt token claims.
  */
-interface TokenUserProvider
+interface ClaimsUserProvider
 {
+
     /**
-     * Retrieves a user using a token. This method should also check whether the token is valid.
+     * Retrieves a user using the provided JWT token. It is expected that this method also validates the token.
      *
      * @param Token $token
      * @return Authenticatable|null
      */
-    public function retrieveByToken(Token $token): ?Authenticatable;
+    public function retrieveByJwtToken(Token $token): ?Authenticatable;
 
     /**
      * Retrieves a user using the provided claims.

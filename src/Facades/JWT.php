@@ -6,11 +6,11 @@ use DateInterval;
 use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Facade;
-use JsonSchema\Constraints\Constraint;
 use Lcobucci\JWT\Signer as AlgorithmImplementation;
 use Lcobucci\JWT\Signer\Key;
 use Lcobucci\JWT\Token;
 use Lcobucci\JWT\UnencryptedToken;
+use Lcobucci\JWT\Validation\Constraint;
 use Shrd\Laravel\JwtTokens\Contracts\ConstraintFactory;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetLoaderFactory;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetResolver;
@@ -35,12 +35,12 @@ use Shrd\Laravel\JwtTokens\Validation\TokenValidator;
  *
  * @method static ConstraintFactory constraints()
  * @method static JwtService setConstraintFactory(ConstraintFactory $constraintFactory)
- * @method static JwtService constraint(string $constraint, callable|Constraint $callback)
+ * @method static JwtService constraint(string|object $constraint, callable|Constraint|null $callback = null)
  *
  * @method static Token parse(string $token)
  * @method static Token|null tryParse(string $token)
  *
- * @method static TokenValidator validate(Token $token)
+ * @method static TokenValidator validate(string|Token $token)
  *
  * @method static SignerRegistry signers()
  * @method static Signer signer(?string $signer = null)

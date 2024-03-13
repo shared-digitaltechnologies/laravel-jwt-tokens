@@ -10,7 +10,7 @@ use Mockery;
 use Illuminate\Http\Request;
 use Lcobucci\JWT\Parser;
 use PHPUnit\Framework\TestCase;
-use Shrd\Laravel\JwtTokens\Contracts\TokenUserProvider;
+use Shrd\Laravel\JwtTokens\Contracts\ClaimsUserProvider;
 use Shrd\Laravel\JwtTokens\Exceptions\JwtParseException;
 use Shrd\Laravel\JwtTokens\Guards\JwtTokenGuard;
 use Shrd\Laravel\JwtTokens\Tokens\Token;
@@ -25,7 +25,7 @@ class JwtTokenGuardTest extends TestCase
         $guard = new JwtTokenGuard(
             name: "token_guard_a",
             parser: Mockery::mock(Parser::class),
-            provider: Mockery::mock(TokenUserProvider::class),
+            provider: Mockery::mock(ClaimsUserProvider::class),
             request: new Request()
         );
 
@@ -40,7 +40,7 @@ class JwtTokenGuardTest extends TestCase
         $guard = new JwtTokenGuard(
             name: "token_guard_a",
             parser: Mockery::mock(Parser::class),
-            provider: Mockery::mock(TokenUserProvider::class),
+            provider: Mockery::mock(ClaimsUserProvider::class),
             request: new Request()
         );
 
@@ -70,8 +70,8 @@ class JwtTokenGuardTest extends TestCase
 
         $user = Mockery::mock(Authenticatable::class);
 
-        $userProvider = Mockery::mock(TokenUserProvider::class);
-        $userProvider->shouldReceive('retrieveByToken')
+        $userProvider = Mockery::mock(ClaimsUserProvider::class);
+        $userProvider->shouldReceive('retrieveByJwtToken')
             ->with($token)
             ->andReturn($user);
 
@@ -104,7 +104,7 @@ class JwtTokenGuardTest extends TestCase
             ->withAnyArgs()
             ->andReturn($token);
 
-        $userProvider = Mockery::mock(TokenUserProvider::class);
+        $userProvider = Mockery::mock(ClaimsUserProvider::class);
         $userProvider->shouldReceive('retrieveByToken')
             ->with($token)
             ->andReturn(null);
@@ -144,8 +144,8 @@ class JwtTokenGuardTest extends TestCase
             ->withNoArgs()
             ->andReturn('123');
 
-        $userProvider = Mockery::mock(TokenUserProvider::class);
-        $userProvider->shouldReceive('retrieveByToken')
+        $userProvider = Mockery::mock(ClaimsUserProvider::class);
+        $userProvider->shouldReceive('retrieveByJwtToken')
             ->once()
             ->with($token)
             ->andReturn($user);

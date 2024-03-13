@@ -190,18 +190,20 @@ class JwtService implements TokenValidatorFactory
         return $this->constraintFactory;
     }
 
-    public function constraint(string $constraint, callable|Constraint $callback): static
+    public function constraint(string|object $constraint, callable|Constraint|null $callback = null): static
     {
-        if($callback instanceof Constraint) {
-            $this->constraintFactory->extend($constraint, $callback);
-        } else {
-            $this->constraintFactory->extend($constraint, $callback(...));
-        }
+        $this->constraintFactory->extend($constraint, $callback);
         return $this;
     }
 
-    public function validate(Token $token): TokenValidator
+    /**
+     * @throws JwtParseException
+     */
+    public function validate(string|Token $token): TokenValidator
     {
+        if(is_string($token)) {
+            $token = $this->parse($token);
+        }
         return new TokenValidator($token, $this->constraintFactory);
     }
 
