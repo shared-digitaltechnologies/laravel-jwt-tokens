@@ -3,20 +3,23 @@
 namespace Shrd\Laravel\JwtTokens\Exceptions;
 
 use Exception;
+use Lcobucci\JWT\Token;
+use Lcobucci\JWT\Validation\Constraint;
 use Shrd\Laravel\JwtTokens\Validation\Constraints\ConstraintViolation;
-use Shrd\Laravel\JwtTokens\Validation\TokenValidator;
 use Throwable;
 
 class TokenValidationException extends Exception implements InvalidJwtException
 {
     /**
-     * @param TokenValidator $validator
+     * @param Token $token
+     * @param Constraint[] $constraints
      * @param ConstraintViolation[] $violations
      * @param string|null $message
      * @param int $code
      * @param Throwable|null $previous
      */
-    public function __construct(public readonly TokenValidator $validator,
+    public function __construct(public readonly Token $token,
+                                public readonly array $constraints,
                                 public readonly array $violations,
                                 ?string $message = null,
                                 int $code = 0,

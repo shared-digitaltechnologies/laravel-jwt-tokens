@@ -16,38 +16,51 @@ use Shrd\Laravel\JwtTokens\Contracts\KeySetLoaderFactory;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetResolver;
 use Shrd\Laravel\JwtTokens\Contracts\SignerRegistry;
 use Shrd\Laravel\JwtTokens\Contracts\TokenBuilderFactory;
+use Shrd\Laravel\JwtTokens\Contracts\TokenLoader;
+use Shrd\Laravel\JwtTokens\Contracts\TokenLoaderRegistry;
+use Shrd\Laravel\JwtTokens\Contracts\TokenValidatorBuilderFactory;
+use Shrd\Laravel\JwtTokens\DateTime\DateRange;
 use Shrd\Laravel\JwtTokens\JwtService;
 use Shrd\Laravel\JwtTokens\Keys\Sets\KeySet;
 use Shrd\Laravel\JwtTokens\Signers\Signer;
 use Shrd\Laravel\JwtTokens\Signers\Verifier;
 use Shrd\Laravel\JwtTokens\Tokens\Builder;
+use Shrd\Laravel\JwtTokens\Validation;
 use Shrd\Laravel\JwtTokens\Tokens\Claims\ClaimsBag;
-use Shrd\Laravel\JwtTokens\Validation\TokenValidator;
 
 /**
  * @method static KeySetLoaderFactory keySetLoaders()
  * @method static JwtService keySetLoader(string $prefix, callable $callback)
- * @method static JwtService setKeySetLoaderFactory(KeySetLoaderFactory $keySetLoaderFactory)
  *
  * @method static KeySet keys(string ...$descriptors)
  * @method static KeySetResolver keySets()
- * @method static JwtService setKeySetResolver(KeySetResolver $keySetResolver)
  *
  * @method static ConstraintFactory constraints()
  * @method static JwtService setConstraintFactory(ConstraintFactory $constraintFactory)
  * @method static JwtService constraint(string|object $constraint, callable|Constraint|null $callback = null)
  *
- * @method static Token parse(string $token)
- * @method static Token|null tryParse(string $token)
+ * @method static Token\Parser parser()
+ * @method static Token parse(string $jwt)
+ * @method static Token|null tryParse(string $jwt)
  *
- * @method static TokenValidator validate(string|Token $token)
+ * @method static TokenValidatorBuilderFactory validators()
+ * @method static Validation\Builder validator()
+ * @method static Token validate(string|Token $token, ?string $loader = null)
+ * @method static bool check(string|Token $token, ?string $loader = null)
+ * @method static DateRange validDateRange(string|Token $token, ?string $loader = null)
+ *
+ * @method static TokenLoaderRegistry loaders()
+ * @method static TokenLoader loader(?string $loader = null)
+ * @method static string defaultLoader()
+ * @method static JwtService setDefaultLoader(string $name)
+ * @method static UnencryptedToken load(string $jwt, ?string $loader = null)
+ * @method static UnencryptedToken|null tryLoad(string $jwt, ?string $loader = null)
  *
  * @method static SignerRegistry signers()
- * @method static Signer signer(?string $signer = null)
- * @method static UnencryptedToken sign(ClaimsBag|Arrayable|Token\DataSet|iterable $claims, Signer|string|null $signer = null)
- * @method static Verifier verifier(?string $signer = null)
- * @method static bool verify(string|Token $token, Verifier|string|null $signer = null)
- * @method static JwtService setSignerRegistry(SignerRegistry $signerRegistry)
+ * @method static Signer signer(AlgorithmImplementation|string|null $signer = null, Key|KeySet|string|null $key = null, ?string $kid = null)
+ * @method static UnencryptedToken sign(ClaimsBag|Arrayable|Token\DataSet|iterable $claims, AlgorithmImplementation|Signer|string|null $signer = null, Key|KeySet|string|null $key = null, ?string $kid = null)
+ * @method static Verifier verifier(AlgorithmImplementation|string|null $signer = null, Key|KeySet|string|null $key = null)
+ * @method static bool verify(string|Token $token, AlgorithmImplementation|Verifier|string|null $signer = null, Key|KeySet|string|null $key = null)
  *
  * @method static TokenBuilderFactory builders()
  * @method static Builder builder(?string $builder = null)

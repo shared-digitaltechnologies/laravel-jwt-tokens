@@ -3,7 +3,7 @@
 namespace Shrd\Laravel\JwtTokens\Tests\Extensions;
 
 use Shrd\Laravel\JwtTokens\Keys\Sets\ArrayKeySet;
-use Shrd\Laravel\JwtTokens\Keys\SimplePublicKey;
+use Shrd\Laravel\JwtTokens\Keys\SimpleKey;
 
 abstract class TestKeyPairs
 {
@@ -16,10 +16,10 @@ abstract class TestKeyPairs
         return $rsa_key_pairs;
     }
 
-    public static function simplePublicRsaKey(int $ix): SimplePublicKey
+    public static function simplePublicRsaKey(int $ix): SimpleKey
     {
         $keys = self::rsaKeyPairs();
-        return SimplePublicKey::rsa($keys[$ix]['public_key']['pem']);
+        return SimpleKey::rsa($keys[$ix]['public_key']['pem']);
     }
 
     public static function simplePublicRsaKeySet(int ...$ixs): ArrayKeySet

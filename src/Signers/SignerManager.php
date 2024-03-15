@@ -160,7 +160,11 @@ class SignerManager implements SignerRegistry
         $signingKey = $this->resolveKey($signingKey, $kid, $optimisticAlgorithm);
 
         /** @var VerificationKey $verificationKey */
-        $algorithm ??= $this->resolveAlgorithmFromKeys($verificationKey, $signingKey);
+        if(is_string($algorithm)) {
+            $algorithm = Algorithm::tryFrom($algorithm);
+        } else if(is_null($algorithm)) {
+            $algorithm = $this->resolveAlgorithmFromKeys($verificationKey, $signingKey);
+        }
 
         if($algorithm->usesSymmetricKey()) {
             return new SymmetricSigner($algorithm->getImplementation(), $signingKey);

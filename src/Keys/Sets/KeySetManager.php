@@ -7,9 +7,11 @@ use DateInterval;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Lcobucci\JWT\Signer\Key;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetLoader;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetResolver;
 use Shrd\Laravel\JwtTokens\Exceptions\KeySetLoadException;
+use Shrd\Laravel\JwtTokens\Keys\VerificationKey;
 use Throwable;
 
 class KeySetManager implements KeySetResolver
@@ -107,6 +109,21 @@ class KeySetManager implements KeySetResolver
     {
         unset($this->resolvedKeySets[$descriptor]);
         $this->cache?->forget($this->getCacheKey($descriptor));
+        return $this;
+    }
+
+    /**
+     * @throws KeySetLoadException
+     */
+    public function overwrite(string $descriptor, KeySet|VerificationKey|string $keySet): static
+    {
+        if(is_string($keySet)) {
+            $keySet = $this->load($keySet);
+        } elseif ($keySet instanceof Key) {
+            $keySet = new SingletonKeySet($keySet);
+        }
+
+        $this->resolvedKeySets[$descriptor] = $keySet;
         return $this;
     }
 

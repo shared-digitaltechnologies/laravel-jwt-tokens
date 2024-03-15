@@ -26,7 +26,6 @@ class BuilderFactory implements TokenBuilderFactory
     protected string $defaultBuilder;
 
     public function __construct(protected SignerRegistry $signerRegistry,
-                                protected KeySetResolver $keySetResolver,
                                 protected ClockInterface $clock,
                                 protected Encoder $encoder,
                                 Repository $config)
@@ -47,17 +46,6 @@ class BuilderFactory implements TokenBuilderFactory
     public function setSignerRegistry(SignerRegistry $signerRegistry): static
     {
         $this->signerRegistry = $signerRegistry;
-        return $this;
-    }
-
-    public function getKeySetResolver(): KeySetResolver
-    {
-        return $this->keySetResolver;
-    }
-
-    public function setKeySetResolver(KeySetResolver $keySetResolver): static
-    {
-        $this->keySetResolver = $keySetResolver;
         return $this;
     }
 
@@ -149,7 +137,6 @@ class BuilderFactory implements TokenBuilderFactory
 
         return ($className)::create(
             signerRegistry: $this->getSignerRegistry(),
-            keySetResolver: $this->getKeySetResolver(),
             encoder: $this->getEncoder(),
             clock: $this->getClock(),
             defaultExpiresIn: $defaultExpiresIn,

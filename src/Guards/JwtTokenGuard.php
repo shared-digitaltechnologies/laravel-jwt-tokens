@@ -4,47 +4,52 @@ namespace Shrd\Laravel\JwtTokens\Guards;
 
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Contracts\Auth\Guard;
 use Illuminate\Contracts\Auth\UserProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Traits\Macroable;
-use Lcobucci\JWT\Parser as TokenParser;
-use Lcobucci\JWT\Token;
 use Lcobucci\JWT\UnencryptedToken;
 use Shrd\Laravel\JwtTokens\Contracts\ClaimsUserProvider;
+use Shrd\Laravel\JwtTokens\Contracts\TokenLoader;
+use Shrd\Laravel\JwtTokens\Exceptions\InvalidJwtException;
 use Shrd\Laravel\JwtTokens\Exceptions\JwtParseException;
-use Shrd\Laravel\JwtTokens\Guards\Concerns\HasParser;
-use Shrd\Laravel\JwtTokens\Guards\Concerns\HasRequest;
-use Shrd\Laravel\JwtTokens\Guards\Concerns\HasTokenUserProvider;
 use Shrd\Laravel\JwtTokens\Tokens\Claims\ClaimsBag;
 
-class JwtTokenGuard
+class JwtTokenGuard implements Guard, GuardWithTokenLoader
 {
-    use Macroable,
-        HasParser,
-        HasTokenUserProvider,
-        HasRequest;
+    use Macroable;
 
     private ?Authenticatable $user = null;
-    private bool $userResolved = false;
 
-    private ?Token $token = null;
+    private ?UnencryptedToken $token = null;
+
     private ?ClaimsBag $claims = null;
 
-    public function __construct(public readonly string $name,
-                                TokenParser            $parser,
-                                ClaimsUserProvider     $provider,
-                                ?Request               $request = null)
+    public function __construct(public readonly string                    $name,
+                                protected TokenLoader                     $loader,
+                                protected ClaimsUserProvider|UserProvider $provider,
+                                protected ?Request                        $request = null)
     {
-        $this
-            ->setParser($parser)
-            ->setProvider($provider);
-
         if($request) $this->setRequest($request);
     }
 
-    public function guardName(): string
+    public function getProvider(): ClaimsUserProvider|UserProvider
     {
-        return $this->name;
+        return $this->provider;
+    }
+
+    public function setProvider(ClaimsUserProvider|UserProvider $provider): static
+    {
+        $this->provider = $provider;
+        return $this;
+    }
+
+    public function getRequest(): Request
+    {
+        if($this->request === null) {
+            $this->request = Request::createFromGlobals();
+        }
+        return $this->request;
     }
 
     public function setRequest(?Request $request): static
@@ -54,18 +59,46 @@ class JwtTokenGuard
         return $this;
     }
 
+    public function getTokenLoader(): TokenLoader
+    {
+        return $this->loader;
+    }
+
+    public function setTokenLoader(TokenLoader $loader): static
+    {
+        $this->loader = $loader;
+        return $this;
+    }
+
+    public function guardName(): string
+    {
+        return $this->name;
+    }
+
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
-    public function token(): ?Token
+    public function token(): ?UnencryptedToken
     {
         if($this->token !== null) return $this->token;
 
         $jwt = $this->getRequest()->bearerToken();
         if($jwt === null) return null;
 
-        $this->token = $this->parse($jwt);
+        $this->token = $this->loader->load($jwt);
         return $this->token;
+    }
+
+    /**
+     * @throws JwtParseException
+     */
+    public function setToken(null|string|UnencryptedToken $token): static
+    {
+        if(is_string($token)) {
+            $token = $this->loader->parse($token);
+        }
+        $this->token = $token;
+        return $this;
     }
 
     public function hasToken(): bool
@@ -86,20 +119,17 @@ class JwtTokenGuard
     public function setUser(?Authenticatable $user): static
     {
         $this->user = $user;
-        $this->userResolved = true;
         return $this;
     }
 
     public function setClaims(mixed $claims): static
     {
         $this->claims = ClaimsBag::from($claims);
-        $this->user = null;
-        $this->userResolved = false;
-        return $this;
+        return $this->forgetUser();
     }
 
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function claims(): ClaimsBag
     {
@@ -107,23 +137,31 @@ class JwtTokenGuard
             return $this->claims;
         }
 
-
         $token = $this->token();
-        if($token instanceof \Shrd\Laravel\JwtTokens\Tokens\Token) {
-            return $token->claims;
-        } else if($token instanceof UnencryptedToken) {
-            return ClaimsBag::fromDataSet($token->claims());
+        if($token !== null) {
+            return ClaimsBag::fromUnencryptedToken($token);
         } else {
             return ClaimsBag::empty();
         }
     }
 
+    protected function retrieveUserByClaims(ClaimsBag $claims): ?Authenticatable
+    {
+        $provider = $this->getProvider();
+
+        if($provider instanceof ClaimsUserProvider) {
+            return $provider->retrieveByClaims($claims);
+        }
+
+        return $provider->retrieveById($claims->getSubject());
+    }
+
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function user(): ?Authenticatable
     {
-        if($this->userResolved) return $this->user;
+        if($this->user !== null) return $this->user;
 
         if($this->claims !== null) {
             $user = $this->retrieveUserByClaims($this->claims);
@@ -137,13 +175,13 @@ class JwtTokenGuard
             return null;
         }
 
-        $user = $this->retrieveUserByToken($token);
+        $user = $this->retrieveUserByClaims($this->claims());
         $this->setUser($user);
         return $user;
     }
 
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function guest(): bool
     {
@@ -151,7 +189,7 @@ class JwtTokenGuard
     }
 
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function check(): bool
     {
@@ -160,7 +198,7 @@ class JwtTokenGuard
 
     /**
      * @throws AuthenticationException
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function authenticate(): Authenticatable
     {
@@ -180,9 +218,9 @@ class JwtTokenGuard
     }
 
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
-    public function id(): ?int
+    public function id(): int|string|null
     {
         return $this->user()?->getAuthIdentifier();
     }

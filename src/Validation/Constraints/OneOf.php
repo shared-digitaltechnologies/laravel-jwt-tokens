@@ -2,10 +2,12 @@
 
 namespace Shrd\Laravel\JwtTokens\Validation\Constraints;
 
+use Exception;
 use Lcobucci\JWT\Token;
 use Lcobucci\JWT\Validation\Constraint;
+use Shrd\Laravel\JwtTokens\DateTime\DateRange;
 
-readonly class OneOf implements Constraint
+readonly class OneOf implements TimeConstraint
 {
     /**
      * @param Constraint[] $constraints
@@ -31,5 +33,22 @@ readonly class OneOf implements Constraint
         }
 
         throw new OneOfConstraintViolation(static::class, $this->constraints, $violations);
+    }
+
+    public function validDateRange(Token $token): DateRange
+    {
+        $result = DateRange::empty();
+
+        foreach ($this->constraints as $constraint) {
+            if($constraint instanceof TimeConstraint) {
+                $result->span($constraint->validDateRange($token));
+            } else {
+                try {
+                    $constraint->assert($token);
+                    return DateRange::unbounded();
+                } catch (Exception) {}
+            }
+        }
+        return $result;
     }
 }

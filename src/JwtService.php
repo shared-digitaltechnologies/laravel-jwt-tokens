@@ -2,112 +2,54 @@
 
 namespace Shrd\Laravel\JwtTokens;
 
-use Carbon\FactoryImmutable;
 use Exception;
-use Illuminate\Config\Repository as ConfigRepository;
-use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Contracts\Validation\Factory as ValidationFactory;
-use Lcobucci\JWT\Encoder;
-use Lcobucci\JWT\Parser as ParserInterface;
+use Lcobucci\JWT\Parser;
+use Lcobucci\JWT\Signer\Key;
 use Lcobucci\JWT\Token;
 use Lcobucci\JWT\UnencryptedToken;
 use Lcobucci\JWT\Validation\Constraint;
-use Psr\Clock\ClockInterface;
-use Shrd\Laravel\JwtTokens\Contracts\ConstraintFactory;
-use Shrd\Laravel\JwtTokens\Contracts\KeySetLoader;
-use Shrd\Laravel\JwtTokens\Contracts\KeySetLoaderFactory;
-use Shrd\Laravel\JwtTokens\Contracts\KeySetResolver;
-use Shrd\Laravel\JwtTokens\Contracts\SignerRegistry;
-use Shrd\Laravel\JwtTokens\Contracts\TokenBuilderFactory;
-use Shrd\Laravel\JwtTokens\Contracts\TokenValidatorFactory;
+use Lcobucci\JWT\Signer as AlgorithmImplementation;
+use Shrd\Laravel\JwtTokens\Contracts\TokenLoader;
+use Shrd\Laravel\JwtTokens\DateTime\DateRange;
+use Shrd\Laravel\JwtTokens\Exceptions\InvalidJwtException;
 use Shrd\Laravel\JwtTokens\Exceptions\JwtParseException;
 use Shrd\Laravel\JwtTokens\Exceptions\KeySetLoadException;
-use Shrd\Laravel\JwtTokens\Keys\Loaders\KeySetLoaderManager;
 use Shrd\Laravel\JwtTokens\Keys\Sets\KeySet;
-use Shrd\Laravel\JwtTokens\Keys\Sets\KeySetManager;
 use Shrd\Laravel\JwtTokens\Signers\Signer;
-use Shrd\Laravel\JwtTokens\Signers\SignerManager;
 use Shrd\Laravel\JwtTokens\Signers\Verifier;
 use Shrd\Laravel\JwtTokens\Tokens\Builder;
-use Shrd\Laravel\JwtTokens\Tokens\BuilderFactory;
 use Shrd\Laravel\JwtTokens\Tokens\Claims\ClaimsBag;
-use Shrd\Laravel\JwtTokens\Validation\Constraints\ConstraintManager;
-use Shrd\Laravel\JwtTokens\Validation\TokenValidator;
 
-class JwtService implements TokenValidatorFactory
+/**
+ * @mixin Builder
+ */
+class JwtService
 {
-    protected SignerRegistry $signerRegistry;
-
-    protected KeySetResolver $keySetResolver;
-
-    protected KeySetLoaderFactory $keySetLoaderFactory;
-
-    protected ConstraintFactory $constraintFactory;
-
-    protected TokenBuilderFactory $builderFactory;
-
-    public function __construct(Container                 $container,
-                                ConfigRepository          $config,
-                                CacheFactory              $cache,
-                                ValidationFactory         $validationFactory,
-                                Encoder                   $encoder,
-                                protected ParserInterface $parser,
-                                ?ClockInterface           $clock = null)
+    public function __construct(protected Container $container)
     {
-        $clock ??= new FactoryImmutable;
-
-        $this->keySetLoaderFactory = new KeySetLoaderManager($container);
-
-        $this->keySetResolver = new KeySetManager(
-            loader: $this->keySetLoaderFactory,
-            config: $config,
-            cacheFactory: $cache
-        );
-
-        $this->constraintFactory = new ConstraintManager(
-            container: $container,
-            config: $config,
-            validationFactory: $validationFactory,
-            keySetResolver: $this->keySetResolver,
-        );
-
-        $this->signerRegistry = new SignerManager(
-            container: $container,
-            keySetResolver: $this->keySetResolver,
-            config: $config
-        );
-
-        $this->builderFactory = new BuilderFactory(
-            signerRegistry: $this->signerRegistry,
-            keySetResolver: $this->keySetResolver,
-            clock: $clock,
-            encoder: $encoder,
-            config: $config,
-        );
     }
 
-
-    public function keySetLoaders(): KeySetLoaderFactory
+    public function keySetLoaders(): Contracts\KeySetLoaderFactory
     {
-        return $this->keySetLoaderFactory;
+        return $this->container->make(Contracts\KeySetLoaderFactory::class);
     }
 
     /**
      * @param string $prefix
-     * @param callable(Container $app, KeySetLoader $defaultLoader): KeySetLoader $callback
+     * @param callable(Container $app, Contracts\KeySetLoader $defaultLoader): Contracts\KeySetLoader $callback
      * @return static
      */
     public function keySetLoader(string $prefix, callable $callback): static
     {
-        $this->keySetLoaderFactory->extend($prefix, $callback);
+        $this->keySetLoaders()->extend($prefix, $callback);
         return $this;
     }
 
-    public function keySets(): KeySetResolver
+    public function keySets(): Contracts\KeySetResolver
     {
-        return $this->keySetResolver;
+        return $this->container->make(Contracts\KeySetResolver::class);
     }
 
     /**
@@ -115,7 +57,12 @@ class JwtService implements TokenValidatorFactory
      */
     public function keys(string ...$descriptors): KeySet
     {
-        return $this->keySetResolver->combine(...$descriptors);
+        return $this->keySets()->combine(...$descriptors);
+    }
+
+    public function parser(): Parser
+    {
+        return $this->container->make(Parser::class);
     }
 
     /**
@@ -123,11 +70,12 @@ class JwtService implements TokenValidatorFactory
      */
     public function parse(string $jwt): Token
     {
+        $parser = $this->parser();
         try {
-            return $this->parser->parse($jwt);
+            return $parser->parse($jwt);
         } catch (Exception $exception) {
             throw new JwtParseException(
-                parser: $this->parser,
+                parser: $parser,
                 jwt: $jwt,
                 previous: $exception
             );
@@ -137,106 +85,137 @@ class JwtService implements TokenValidatorFactory
     public function tryParse(string $jwt): ?Token
     {
         try {
-            return $this->parser->parse($jwt);
+            return $this->parser()->parse($jwt);
         } catch (Exception) {
             return null;
         }
     }
 
-    public function setKeySetLoaderFactory(KeySetLoaderFactory $keySetLoaderFactory): static
+    public function constraints(): Contracts\ConstraintFactory
     {
-        $this->keySetLoaderFactory = $keySetLoaderFactory;
-        if(method_exists($this->keySetResolver, 'setLoader')) {
-            $this->keySetResolver->setLoader($keySetLoaderFactory);
-        }
-        return $this;
-    }
-
-    public function setConstraintFactory(ConstraintFactory $constraintFactory): static
-    {
-        $this->constraintFactory = $constraintFactory;
-        return $this;
-    }
-
-    public function setKeySetResolver(KeySetResolver $keySetResolver): static
-    {
-        $this->keySetResolver = $keySetResolver;
-        if(method_exists($this->constraintFactory, 'setKeySetResolver')) {
-            $this->constraintFactory->setKeySetResolver($keySetResolver);
-        }
-        if(method_exists($this->signerRegistry, 'setKeySetResolver')) {
-            $this->signerRegistry->setKeySetResolver($keySetResolver);
-        }
-        if(method_exists($this->builderFactory, 'setKeySetResolver')) {
-            $this->builderFactory->setKeySetResolver($keySetResolver);
-        }
-        return $this;
-    }
-
-    public function setSignerRegistry(SignerRegistry $signerRegistry): static
-    {
-        $this->signerRegistry = $signerRegistry;
-        if(method_exists($this->builderFactory, 'setSignerRegistry')) {
-            $this->builderFactory->setSignerRegistry($signerRegistry);
-        }
-        return $this;
-    }
-
-
-
-
-    public function constraints(): ConstraintFactory
-    {
-        return $this->constraintFactory;
+        return $this->container->make(Contracts\ConstraintFactory::class);
     }
 
     public function constraint(string|object $constraint, callable|Constraint|null $callback = null): static
     {
-        $this->constraintFactory->extend($constraint, $callback);
+        $this->constraints()->extend($constraint, $callback);
+        return $this;
+    }
+
+    public function validators(): Contracts\TokenValidatorBuilderFactory
+    {
+        return $this->container->make(Contracts\ConstraintFactory::class);
+    }
+
+    public function validator(): Validation\Builder
+    {
+        return $this->validators()->createValidatorBuilder();
+    }
+
+    public function loaders(): Contracts\TokenLoaderRegistry
+    {
+        return $this->container->make(Contracts\TokenLoaderRegistry::class);
+    }
+
+    public function loader(?string $loader = null): TokenLoader
+    {
+        return $this->loaders()->get($loader);
+    }
+
+    public function defaultLoader(): string
+    {
+        return $this->loaders()->defaultLoader();
+    }
+
+    public function setDefaultLoader(string $name): static
+    {
+        $this->loaders()->setDefaultLoader($name);
         return $this;
     }
 
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
-    public function validate(string|Token $token): TokenValidator
+    public function load(string $jwt, ?string $loader = null): UnencryptedToken
     {
-        if(is_string($token)) {
-            $token = $this->parse($token);
+        return $this->loader($loader)->load($jwt);
+    }
+
+    public function tryLoad(string $jwt, ?string $loader = null): ?UnencryptedToken
+    {
+        return $this->loader($loader)->tryLoad($jwt);
+    }
+
+    /**
+     * @throws InvalidJwtException
+     */
+    public function validate(string|Token $token, ?string $loader = null): Token
+    {
+        return $this->loader($loader)->validate($token);
+    }
+
+    public function check(string|Token $token, ?string $loader = null): bool
+    {
+        return $this->loader($loader)->check($token);
+    }
+
+    public function validDateRange(string|Token $token, ?string $loader = null): DateRange
+    {
+        return $this->loader($loader)->validDateRange($token);
+    }
+
+    public function signers(): Contracts\SignerRegistry
+    {
+        return $this->container->make(Contracts\SignerRegistry::class);
+    }
+
+    public function signer(AlgorithmImplementation|string|null $signer = null,
+                           Key|KeySet|string|null $key = null,
+                           ?string $kid = null): Signer
+    {
+        if((is_string($signer) && is_null($key)) || is_null($signer)) {
+            return $this->signers()->signer($signer);
+        } else {
+            return $this->signers()->signerUsing($signer, $key, $kid);
         }
-        return new TokenValidator($token, $this->constraintFactory);
-    }
-
-    public function signers(): SignerRegistry
-    {
-        return $this->signerRegistry;
-    }
-
-    public function signer(string|null $signer = null): Signer
-    {
-        return $this->signers()->signer($signer);
     }
 
     public function sign(ClaimsBag|Arrayable|Token\DataSet|iterable $claims,
-                         Signer|string|null $signer = null): UnencryptedToken
+                         AlgorithmImplementation|Signer|string|null $signer = null,
+                         Key|KeySet|string|null $key = null,
+                         ?string $kid = null): UnencryptedToken
     {
         if($claims instanceof Token\DataSet) $claims = $claims->all();
         if($claims instanceof Arrayable) $claims = $claims->toArray();
 
-        return $this->builder()
-            ->withClaims($claims)
-            ->sign($signer);
+        $builder = $this->builder()
+            ->withClaims($claims);
+
+        if((is_string($signer) && is_null($key))
+            || is_null($signer)
+            || $signer instanceof Signer) {
+            return $builder->sign($signer);
+        } else {
+            return $builder->signUsing($signer, $key, $kid);
+        }
     }
 
-    public function verifier(string|null $signer = null): Verifier
+    public function verifier(AlgorithmImplementation|string|null $signer = null,
+                             Key|KeySet|string|null $key = null): Verifier
     {
-        return $this->signers()->verifier($signer);
+        if(is_null($signer) || is_null($key)) {
+            return $this->signers()->verifier($signer);
+        } else {
+            return $this->signers()->verifierUsing($signer, $key);
+        }
     }
 
     /**
      * @throws JwtParseException
      */
-    public function verify(string|Token $token, Verifier|string|null $signer = null): bool
+    public function verify(string|Token $token,
+                           AlgorithmImplementation|Verifier|string|null $signer = null,
+                           Key|KeySet|string|null $key = null): bool
     {
         if(($token instanceof Token) && !($token instanceof UnencryptedToken)) {
             $token = $token->toString();
@@ -248,7 +227,7 @@ class JwtService implements TokenValidatorFactory
 
         assert($token instanceof UnencryptedToken);
 
-        $verifier = $signer instanceof Verifier ? $signer : $this->verifier($signer);
+        $verifier = $signer instanceof Verifier ? $signer : $this->verifier($signer, $key);
 
         return $verifier->verify(
             $token->signature()->toString(),
@@ -256,9 +235,9 @@ class JwtService implements TokenValidatorFactory
         );
     }
 
-    public function builders(): TokenBuilderFactory
+    public function builders(): Contracts\TokenBuilderFactory
     {
-        return $this->builderFactory;
+        return $this->container->make(Contracts\TokenBuilderFactory::class);
     }
 
     public function builder(?string $builder = null): Builder

@@ -5,6 +5,8 @@ namespace Shrd\Laravel\JwtTokens\Tokens;
 use ArrayAccess;
 use DateTimeInterface;
 use Illuminate\Support\Carbon;
+use Lcobucci\JWT\Encoder;
+use Lcobucci\JWT\Encoding\JoseEncoder;
 use Lcobucci\JWT\Token\DataSet;
 use Lcobucci\JWT\Token\InvalidTokenStructure;
 use Lcobucci\JWT\Token\Signature;
@@ -12,18 +14,45 @@ use Lcobucci\JWT\UnencryptedToken;
 use Shrd\Laravel\JwtTokens\Algorithms\Algorithm;
 use Shrd\Laravel\JwtTokens\Tokens\Claims\ClaimsBag;
 
-/**
- * @mixin ClaimsBag
- */
 readonly class Token implements UnencryptedToken, ArrayAccess
 {
     public ClaimsBag $claims;
 
-    public function __construct(private DataSet   $_headers,
-                                private DataSet   $_claims,
-                                private Signature $_signature)
+    private DataSet $_claims;
+    private DataSet $_headers;
+    private Signature $_signature;
+
+    public function __construct(DataSet   $headers,
+                                DataSet   $claims,
+                                Signature $signature)
     {
-        $this->claims = ClaimsBag::fromDataSet($this->_claims);
+        $this->_claims = $claims;
+        $this->_headers = $headers;
+        $this->_signature = $signature;
+        $this->claims = ClaimsBag::fromDataSet($claims);
+    }
+
+    public static function encode(array $headers,
+                                  array $claims,
+                                  string $signature,
+                                  ?Encoder $encoder = null): self
+    {
+        $encoder ??= new JoseEncoder;
+
+        $encodedHeaders = $encoder->base64UrlEncode($encoder->jsonEncode($headers));
+        $encodedClaims = $encoder->base64UrlEncode($encoder->jsonEncode($claims));
+        $encodedSignature = $encoder->base64UrlEncode($signature);
+
+        return new self(
+            headers: new DataSet($headers, $encodedHeaders),
+            claims: new DataSet($claims, $encodedClaims),
+            signature: new Signature($signature, $encodedSignature)
+        );
+    }
+
+    public function claimsBag(): ClaimsBag
+    {
+        return $this->claims;
     }
 
     public function headers(): DataSet

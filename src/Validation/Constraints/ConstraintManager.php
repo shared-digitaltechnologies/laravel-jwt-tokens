@@ -13,7 +13,7 @@ use Illuminate\Contracts\Validation\Factory as ValidationFactory;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Lcobucci\JWT\Validation\Constraint;
-use Lcobucci\JWT\Validation\ValidAt;
+use Lcobucci\JWT\Validation\ValidAt as ValidAtInterface;
 use Psr\Clock\ClockInterface;
 use ReflectionClass;
 use ReflectionFunction;
@@ -23,10 +23,12 @@ use RuntimeException;
 use Shrd\Laravel\JwtTokens\Algorithms\Algorithm;
 use Shrd\Laravel\JwtTokens\Contracts\IntrospectableConstraintFactory;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetResolver;
+use Shrd\Laravel\JwtTokens\Contracts\TokenValidatorBuilderFactory;
 use Shrd\Laravel\JwtTokens\Exceptions\KeySetLoadException;
 use Shrd\Laravel\JwtTokens\Signers\Verifier;
+use Shrd\Laravel\JwtTokens\Validation\Builder;
 
-class ConstraintManager implements IntrospectableConstraintFactory
+class ConstraintManager implements IntrospectableConstraintFactory, TokenValidatorBuilderFactory
 {
     /**
      * @var array<string, Constraint>
@@ -320,19 +322,13 @@ class ConstraintManager implements IntrospectableConstraintFactory
         );
     }
 
-
-
     /** @noinspection PhpUnused */
     public function createValidAtConstraint(bool  $strict = true,
-                                            mixed $leeway = null): ValidAt
+                                            mixed $leeway = null): ValidAtInterface
     {
         $leeway = $this->toDateInterval($leeway) ?? $this->defaultLeeway();
         $clock = $this->getClock();
-        if($strict) {
-            return new Constraint\StrictValidAt($clock, $leeway);
-        } else {
-            return new Constraint\LooseValidAt($clock, $leeway);
-        }
+        return new ValidAt($clock, $leeway, $strict);
     }
 
     /** @noinspection PhpUnused */
@@ -437,6 +433,24 @@ class ConstraintManager implements IntrospectableConstraintFactory
     }
 
     /** @noinspection PhpUnused */
+    public function createClaimValuesInConstraint(string $claim, iterable $values): ClaimValuesIn
+    {
+        return new ClaimValuesIn($claim, $values);
+    }
+
+    /** @noinspection PhpUnused */
+    public function createHasClaimWithValueInConstraint(string $claim, iterable $values): HasClaimWithValueIn
+    {
+        return new HasClaimWithValueIn($claim, $values);
+    }
+
+    /** @noinspection PhpUnused */
+    public function createHasHeaderWithValueInConstraint(string $header, iterable $values): HasHeaderWithValueIn
+    {
+        return new HasHeaderWithValueIn($header, $values);
+    }
+
+    /** @noinspection PhpUnused */
     public function createHasHeadersConstraint(string ...$names): HasHeaders
     {
         return new HasHeaders($names);
@@ -476,4 +490,8 @@ class ConstraintManager implements IntrospectableConstraintFactory
     }
 
 
+    public function createValidatorBuilder(): Builder
+    {
+        return new Builder($this);
+    }
 }

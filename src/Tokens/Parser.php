@@ -3,13 +3,19 @@
 namespace Shrd\Laravel\JwtTokens\Tokens;
 
 use Lcobucci\JWT\Decoder;
+use Lcobucci\JWT\Encoding\JoseEncoder;
 use Lcobucci\JWT\Parser as ParserInterface;
 use Lcobucci\JWT\Token as BaseToken;
 
 readonly class Parser implements ParserInterface
 {
-    public function __construct(private Decoder $decoder)
+    public function __construct(protected Decoder $decoder)
     {
+    }
+
+    public static function create(?Decoder $decoder = null): self
+    {
+        return new self($decoder ?? new JoseEncoder);
     }
 
     /**

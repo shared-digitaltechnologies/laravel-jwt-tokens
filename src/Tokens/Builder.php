@@ -8,7 +8,6 @@ use DateInterval;
 use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Traits\Macroable;
 use Lcobucci\JWT\Builder as BuilderInterface;
 use Lcobucci\JWT\Encoder;
 use Lcobucci\JWT\Encoding\JoseEncoder;
@@ -25,8 +24,6 @@ use Shrd\Laravel\JwtTokens\Signers\Signer;
 
 readonly class Builder implements BuilderInterface
 {
-    use Macroable;
-
     private function __construct(protected SignerRegistry $signerRegistry,
                                  protected Encoder $encoder,
                                  protected ClockInterface $clock,

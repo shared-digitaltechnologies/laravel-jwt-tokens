@@ -4,13 +4,12 @@ namespace Shrd\Laravel\JwtTokens\Tests\Unit\Guards;
 
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Lcobucci\JWT\Token\DataSet;
-use Lcobucci\JWT\Token\Signature;
 use Mockery;
 use Illuminate\Http\Request;
-use Lcobucci\JWT\Parser;
 use PHPUnit\Framework\TestCase;
 use Shrd\Laravel\JwtTokens\Contracts\ClaimsUserProvider;
+use Shrd\Laravel\JwtTokens\Contracts\TokenLoader;
+use Shrd\Laravel\JwtTokens\Exceptions\InvalidJwtException;
 use Shrd\Laravel\JwtTokens\Exceptions\JwtParseException;
 use Shrd\Laravel\JwtTokens\Guards\JwtTokenGuard;
 use Shrd\Laravel\JwtTokens\Tokens\Token;
@@ -18,13 +17,13 @@ use Shrd\Laravel\JwtTokens\Tokens\Token;
 class JwtTokenGuardTest extends TestCase
 {
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function test_guest_if_authorization_token_is_empty()
     {
         $guard = new JwtTokenGuard(
             name: "token_guard_a",
-            parser: Mockery::mock(Parser::class),
+            loader: Mockery::mock(TokenLoader::class),
             provider: Mockery::mock(ClaimsUserProvider::class),
             request: new Request()
         );
@@ -34,12 +33,13 @@ class JwtTokenGuardTest extends TestCase
 
     /**
      * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function test_throws_authentication_exception_without_token()
     {
         $guard = new JwtTokenGuard(
             name: "token_guard_a",
-            parser: Mockery::mock(Parser::class),
+            loader: Mockery::mock(TokenLoader::class),
             provider: Mockery::mock(ClaimsUserProvider::class),
             request: new Request()
         );
@@ -50,35 +50,35 @@ class JwtTokenGuardTest extends TestCase
     }
 
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function test_parses_token_and_resolves_user_using_that_token()
     {
-        $request = (new Request);
-        $request->headers->set('Authorization', 'Bearer AAAA.AAAA.');
-
-        $token = new Token(
-            new DataSet([], 'AAAA'),
-            new DataSet([], 'AAAA'),
-            new Signature('', '')
+        $token = Token::encode(
+            headers: ["typ" => "JWT"],
+            claims: [],
+            signature: ''
         );
 
-        $parser = Mockery::mock(Parser::class);
-        $parser->shouldReceive('parse')
+        $request = (new Request);
+        $request->headers->set('Authorization', "Bearer AAAA.AAAA.");
+
+        $loader = Mockery::mock(TokenLoader::class);
+        $loader->shouldReceive('load')
             ->with('AAAA.AAAA.')
             ->andReturn($token);
 
         $user = Mockery::mock(Authenticatable::class);
 
-        $userProvider = Mockery::mock(ClaimsUserProvider::class);
-        $userProvider->shouldReceive('retrieveByJwtToken')
-            ->with($token)
+        $provider = Mockery::mock(ClaimsUserProvider::class);
+        $provider->shouldReceive('retrieveByClaims')
+            ->withAnyArgs()
             ->andReturn($user);
 
         $guard = new JwtTokenGuard(
             name: "token_guard_a",
-            parser: $parser,
-            provider: $userProvider,
+            loader: $loader,
+            provider: $provider,
             request: $request
         );
 
@@ -86,32 +86,28 @@ class JwtTokenGuardTest extends TestCase
     }
 
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function test_guest_if_user_does_not_exist()
     {
+        $token = Token::encode([], [], '');
+
         $request = (new Request);
         $request->headers->set('Authorization', 'Bearer AAAA.AAAA.');
 
-        $token = new Token(
-            new DataSet([], 'AAAA'),
-            new DataSet([], 'AAAA'),
-            new Signature('', '')
-        );
-
-        $parser = Mockery::mock(Parser::class);
-        $parser->shouldReceive('parse')
-            ->withAnyArgs()
+        $loader = Mockery::mock(TokenLoader::class);
+        $loader->shouldReceive('load')
+            ->with('AAAA.AAAA.')
             ->andReturn($token);
 
         $userProvider = Mockery::mock(ClaimsUserProvider::class);
-        $userProvider->shouldReceive('retrieveByToken')
-            ->with($token)
+        $userProvider->shouldReceive('retrieveByClaims')
+            ->withAnyArgs()
             ->andReturn(null);
 
         $guard = new JwtTokenGuard(
             name: "token_guard_a",
-            parser: $parser,
+            loader: $loader,
             provider: $userProvider,
             request: $request
         );
@@ -120,22 +116,19 @@ class JwtTokenGuardTest extends TestCase
     }
 
     /**
-     * @throws JwtParseException
+     * @throws InvalidJwtException
      */
     public function test_retrieves_user_once()
     {
+
         $request = (new Request);
         $request->headers->set('Authorization', 'Bearer AAAA.AAAA.');
 
-        $token = new Token(
-            new DataSet([], 'AAAA'),
-            new DataSet([], 'AAAA'),
-            new Signature('', '')
-        );
+        $token = Token::encode([], [], '');
 
-        $parser = Mockery::mock(Parser::class);
-        $parser->shouldReceive('parse')
-            ->withAnyArgs()
+        $loader = Mockery::mock(TokenLoader::class);
+        $loader->shouldReceive('load')
+            ->with('AAAA.AAAA.')
             ->andReturn($token);
 
         $user = Mockery::mock(Authenticatable::class);
@@ -145,14 +138,14 @@ class JwtTokenGuardTest extends TestCase
             ->andReturn('123');
 
         $userProvider = Mockery::mock(ClaimsUserProvider::class);
-        $userProvider->shouldReceive('retrieveByJwtToken')
+        $userProvider->shouldReceive('retrieveByClaims')
             ->once()
-            ->with($token)
+            ->withAnyArgs()
             ->andReturn($user);
 
         $guard = new JwtTokenGuard(
             name: "token_guard_a",
-            parser: $parser,
+            loader: $loader,
             provider: $userProvider,
             request: $request
         );

@@ -45,7 +45,7 @@ class ClaimsBag implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, I
         ClaimsBagHasOpenIdHelpers,
         ClaimsBagHasAzureHelpers;
 
-    private function __construct(protected array $claims)
+    public final function __construct(protected array $claims)
     {
     }
 
@@ -91,7 +91,7 @@ class ClaimsBag implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, I
 
     public static function fromDataSet(DataSet $dataSet): static
     {
-        return new static($dataSet->all(), []);
+        return new static($dataSet->all());
     }
 
     public static function fromUnencryptedToken(UnencryptedToken $token): static

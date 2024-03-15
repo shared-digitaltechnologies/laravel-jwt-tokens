@@ -4,7 +4,7 @@ namespace Shrd\Laravel\JwtTokens\Keys;
 
 use Shrd\Laravel\JwtTokens\Algorithms\Algorithm;
 
-readonly class SimplePublicKey implements VerificationKey
+readonly class SimpleKey implements VerificationKey, SigningKey
 {
     public function __construct(public KeyType $keyType,
                                 public string $contents,
