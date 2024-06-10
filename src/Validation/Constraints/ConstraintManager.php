@@ -22,6 +22,7 @@ use ReflectionParameter;
 use RuntimeException;
 use Shrd\Laravel\JwtTokens\Algorithms\Algorithm;
 use Shrd\Laravel\JwtTokens\Contracts\IntrospectableConstraintFactory;
+use Shrd\Laravel\JwtTokens\Contracts\IssuesTokens;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetResolver;
 use Shrd\Laravel\JwtTokens\Contracts\TokenValidatorBuilderFactory;
 use Shrd\Laravel\JwtTokens\Exceptions\KeySetLoadException;
@@ -355,6 +356,12 @@ class ConstraintManager implements IntrospectableConstraintFactory, TokenValidat
     {
         if(count($issuers) === 0) $issuers = $this->defaultIssuers();
         return new Constraint\IssuedBy(...$issuers);
+    }
+
+    /** @noinspection PhpUnused */
+    public function createIssuedAndSignedByConstraint(IssuesTokens ...$issuers): IssuedAndSignedBy
+    {
+        return new IssuedAndSignedBy($this->keySetResolver, $issuers);
     }
 
     /** @noinspection PhpUnused */

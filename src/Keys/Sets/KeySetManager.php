@@ -8,11 +8,13 @@ use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Lcobucci\JWT\Signer\Key;
+use Shrd\Laravel\JwtTokens\Contracts\IssuesTokens;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetLoader;
 use Shrd\Laravel\JwtTokens\Contracts\KeySetResolver;
 use Shrd\Laravel\JwtTokens\Exceptions\KeySetLoadException;
 use Shrd\Laravel\JwtTokens\Keys\VerificationKey;
 use Throwable;
+use WeakMap;
 
 class KeySetManager implements KeySetResolver
 {
@@ -28,6 +30,11 @@ class KeySetManager implements KeySetResolver
 
     protected array $setConfigs = [];
 
+    /**
+     * @var WeakMap<IssuesTokens, KeySet>
+     */
+    protected WeakMap $issuerKeySets;
+
     public function __construct(protected KeySetLoader $loader,
                                 ConfigRepository       $config,
                                 CacheFactory           $cacheFactory)
@@ -42,6 +49,8 @@ class KeySetManager implements KeySetResolver
             $cacheStore = $config->get('jwt.keys.cache.store');
             $this->cache = $cacheFactory->store($cacheStore);
         }
+
+        $this->issuerKeySets = new WeakMap;
     }
 
     public function getLoader(): KeySetLoader
@@ -147,5 +156,29 @@ class KeySetManager implements KeySetResolver
         if(count($descriptors) === 1) return $this->get($descriptors[0]);
 
         return new CombinedKeySet(...array_map($this->get(...), $descriptors));
+    }
+
+    /**
+     * @throws KeySetLoadException
+     */
+    protected function loadForTokenIssuer(IssuesTokens $issuer): KeySet
+    {
+        $descriptor = $issuer->jwtVerificationKeySet();
+        if($descriptor instanceof KeySet) return $descriptor;
+
+        if(is_string($descriptor)) return $this->get($descriptor);
+
+        return $this->combine(...$descriptor);
+    }
+
+    public function forTokenIssuer(IssuesTokens $issuer): KeySet
+    {
+        if(isset($this->issuerKeySets[$issuer])) {
+            return $this->issuerKeySets[$issuer];
+        }
+
+        $keySet = $this->loadForTokenIssuer($issuer);
+        $this->issuerKeySets[$issuer] = $keySet;
+        return $keySet;
     }
 }

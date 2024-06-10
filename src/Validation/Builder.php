@@ -7,6 +7,7 @@ use Lcobucci\JWT\Token;
 use Lcobucci\JWT\Validation\Constraint;
 use Shrd\Laravel\JwtTokens\Algorithms\Algorithm;
 use Shrd\Laravel\JwtTokens\Contracts\ConstraintFactory;
+use Shrd\Laravel\JwtTokens\Contracts\IssuesTokens;
 use Shrd\Laravel\JwtTokens\DateTime\DateRange;
 use Shrd\Laravel\JwtTokens\Signers\Verifier;
 use Shrd\Laravel\JwtTokens\Validation\Constraints\AllOf;
@@ -32,6 +33,7 @@ use Shrd\Laravel\JwtTokens\Contracts\TokenValidator;
  * @method $this relatedTo(string $subject)
  * @method $this signedWith(string ...$keySets)
  * @method $this signedUsing(string|Algorithm ...$algorithms)
+ * @method $this issuedAndSignedBy(IssuesTokens ...$issuers)
  * @method $this verifyWith(Verifier $verifier)
  * @method $this hasNonceValue(string $value)
  * @method $this callback(callable $callback, ?string $message = null)

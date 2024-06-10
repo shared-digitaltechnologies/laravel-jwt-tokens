@@ -36,7 +36,8 @@ class CacheTokenLoader implements TokenLoader
 
     protected function getCacheKey(string $jwt): string
     {
-        return "ctl[$this->name]:$jwt";
+        $hashed = base64_encode(sha1($jwt, binary: true));
+        return "ctl[$this->name]:$hashed";
     }
 
     /**

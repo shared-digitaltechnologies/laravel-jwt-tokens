@@ -7,7 +7,10 @@ use Throwable;
 
 class EmptyConstraintViolation extends Exception implements ConstraintViolation
 {
-    public function __construct(?string $message = null, int $code = 0, ?Throwable $previous = null)
+    public function __construct(public readonly ?string $constraint = null,
+                                ?string $message = null,
+                                int $code = 0,
+                                ?Throwable $previous = null)
     {
         $message ??= "Every token will violate the empty constraint.";
 
@@ -16,6 +19,6 @@ class EmptyConstraintViolation extends Exception implements ConstraintViolation
 
     public function getConstraintClass(): ?string
     {
-        return null;
+        return $this->constraint;
     }
 }
